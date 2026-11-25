@@ -47,7 +47,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test -- --test-threads 1
+      - run: cargo test --locked -- --test-threads 1
+      - name: Validate generated native service definitions
+        if: runner.os != 'Windows'
+        run: cargo test --locked --bin shawl generated_native_config -- --ignored
 
   lint:
     runs-on: windows-latest

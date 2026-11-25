@@ -1133,3 +1133,26 @@ speculate::speculate! {
         }
     }
 }
+
+#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
+mod native_cli_tests {
+    use super::*;
+
+    #[test]
+    fn system_scope_requires_explicit_account() {
+        let parsed = Cli::try_parse_from(["shawl", "add", "--name", "app", "--system", "--service-user", "appuser", "--", "/bin/sh"]).unwrap();
+        match parsed.sub {
+            Subcommand::Add { common, .. } => {
+                assert!(common.system);
+                assert_eq!(common.service_user.as_deref(), Some("appuser"));
+            }
+            _ => panic!("expected add"),
+        }
+        for flag in [vec!["--system"], vec!["--service-user", "appuser"]] {
+            let mut args = vec!["shawl", "add", "--name", "app"];
+            args.extend(flag);
+            args.extend(["--", "/bin/sh"]);
+            assert_eq!(Cli::try_parse_from(args).unwrap_err().kind(), clap::error::ErrorKind::MissingRequiredArgument);
+        }
+    }
+}

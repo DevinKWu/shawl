@@ -100,3 +100,14 @@ The `shawl run` subcommand is Windows-only; use native commands elsewhere.
 Environment values and arguments may be exposed by native managers even
 though files are created with mode 0600. Never pass credentials through
 --env or command arguments; use application-managed credentials instead.
+
+## Validation
+
+Run `cargo test --locked` on each target. On Linux and macOS, run
+`cargo test --locked --bin shawl generated_native_config -- --ignored` to
+check the actual generated definition with systemd-analyze or plutil.
+These tests do not register or start services; they are not lifecycle tests.
+Before release, separately exercise user/system registration, service
+identity, exact argv/env/cwd, start and stop, normal/failing exit, restart,
+descendant cleanup, duplicate names, permissions, and reboot/login
+persistence in disposable native test environments.

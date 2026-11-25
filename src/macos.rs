@@ -218,4 +218,19 @@ mod tests {
         options.command.push("bad\rvalue".into());
         assert!(render_plist("test", None, &[], &options, Scope::User, Some(Path::new("/tmp"))).is_err());
     }
+    #[test]
+    #[ignore = "requires native macOS plutil"]
+    fn generated_native_config() {
+        let dir = std::env::temp_dir().join(format!("shawl-launchd-verify-{}", std::process::id()));
+        fs::create_dir(&dir).unwrap();
+        let path = dir.join("org.shawl.test.plist");
+        let mut options = opts();
+        options.env.push(("TEST".into(), "<&>".into()));
+        let plist = render_plist("test", Some("/tmp"), &[], &options, Scope::User, Some(&dir)).unwrap();
+        native::write_new(&path, &plist).unwrap();
+        let output = Command::new("/usr/bin/plutil").arg("-lint").arg("--").arg(&path).output();
+        fs::remove_dir_all(&dir).unwrap();
+        let output = output.expect("plutil must be available");
+        assert!(output.status.success(), "plutil lint: {}", String::from_utf8_lossy(&output.stderr));
+    }
 }

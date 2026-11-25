@@ -256,4 +256,20 @@ mod tests {
         assert!(!user.contains("User="));
         assert!(user.contains("WantedBy=default.target\n"));
     }
+    #[test]
+    #[ignore = "requires the native systemd-analyze executable"]
+    fn generated_native_config() {
+        let dir = std::env::temp_dir().join(format!("shawl-systemd-verify-{}", std::process::id()));
+        fs::create_dir(&dir).unwrap();
+        let path = dir.join("shawl-test.service");
+        let mut options = opts();
+        options.env.push(("TEST".into(), "a $HOME 100%".into()));
+        options.command.extend(["".into(), "a b".into(), "a\\b".into()]);
+        let unit = render_unit("shawl-test", Some("/tmp"), &[], &options, Scope::User).unwrap();
+        native::write_new(&path, &unit).unwrap();
+        let output = Command::new("systemd-analyze").arg("verify").arg(&path).output();
+        fs::remove_dir_all(&dir).unwrap();
+        let output = output.expect("systemd-analyze must be available");
+        assert!(output.status.success(), "systemd-analyze verify: {}", String::from_utf8_lossy(&output.stderr));
+    }
 }
