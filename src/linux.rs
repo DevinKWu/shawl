@@ -160,6 +160,30 @@ pub fn add_service(name: &str, cwd: Option<&str>, dependencies: &[String], opts:
         reload().map_err(|cleanup| format!("Reload failed ({error}); unit removed but reload failed ({cleanup})"))?;
         return Err(error);
     }
+    // The invoking shell and the user manager can have different XDG paths.
+    // Confirm the manager really loaded our file instead of reporting success
+    // for a missing or shadowed unit.
+    let verification = (|| -> Result<()> {
+        let output = Command::new("systemctl")
+            .args(["--user", "show", "--property=LoadState,FragmentPath", "--", &filename])
+            .output()?;
+        if !output.status.success() {
+            return Err("Unable to inspect registered unit".into());
+        }
+        let stdout = String::from_utf8(output.stdout)?;
+        let loaded = stdout.lines().any(|line| line == "LoadState=loaded");
+        let fragment = stdout.lines().find_map(|line| line.strip_prefix("FragmentPath="));
+        let expected = fs::canonicalize(&path)?;
+        if !loaded || fragment.and_then(|p| fs::canonicalize(p).ok()).as_ref() != Some(&expected) {
+            return Err("The systemd user manager did not load the generated unit; check its configuration directory".into());
+        }
+        Ok(())
+    })();
+    if let Err(error) = verification {
+        fs::remove_file(&path).map_err(|cleanup| format!("Verification failed ({error}); cleanup failed ({cleanup})"))?;
+        reload().map_err(|cleanup| format!("Verification failed ({error}); unit removed but reload failed ({cleanup})"))?;
+        return Err(error);
+    }
     println!("Registered {filename}. Start it with systemctl --user start {filename}.");
     Ok(())
 }

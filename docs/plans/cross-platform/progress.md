@@ -4,7 +4,7 @@
 - 建立 develop 與 feature/cross-platform；確認實作開始時功能分支未落後 develop。
 - 審查 CLI、main、Windows service/control/Job Object、child binary、既有測試及 CI。
 - 分離 Windows 專屬相依與 API，build.rs 依目標平台決定是否編譯 resource；保留 Windows CLI 與服務實作。
-- Linux 初版：systemd user unit 產生、註冊、原生管理、重複註冊防護、失敗清理、基本驗證與單元測試；不直接啟動或 enable。
+- Linux 初版：systemd user unit 產生、註冊、原生管理、重複註冊防護、載入路徑驗證、失敗清理、基本驗證與單元測試；不直接啟動或 enable。
 - macOS 暫時提供 CLI 與明確未實作錯誤，尚無 launchd backend。
 - 新增 docs/platforms.md，記錄支援範圍及差異。
 
