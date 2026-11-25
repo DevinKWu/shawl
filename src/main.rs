@@ -3,6 +3,10 @@ mod cli;
 mod control;
 #[cfg(target_os = "linux")]
 mod linux;
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+mod native;
 #[cfg(windows)]
 mod process_job;
 #[cfg(windows)]
@@ -162,11 +166,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             dependencies,
             common,
         } => linux::add_service(&name, cwd.as_deref(), &dependencies, &common),
-        Subcommand::Run { .. } => Err("On Linux, start the registered service using systemctl --user.".into()),
+        Subcommand::Run { .. } => Err("On Linux, start the registered service using systemctl (with --user for a user service).".into()),
     }
 }
 
-#[cfg(not(any(windows, target_os = "linux")))]
+#[cfg(target_os = "macos")]
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    match evaluate_cli().sub {
+        Subcommand::Add {
+            name,
+            cwd,
+            dependencies,
+            common,
+        } => macos::add_service(&name, cwd.as_deref(), &dependencies, &common),
+        Subcommand::Run { .. } => Err("On macOS, load and start the registered service using launchctl.".into()),
+    }
+}
+
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     match evaluate_cli().sub {
         Subcommand::Add { .. } | Subcommand::Run { .. } => {

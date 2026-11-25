@@ -300,6 +300,16 @@ pub struct CommonOpts {
     #[clap(long)]
     pub interactive: bool,
 
+    /// Register a system service instead of a user service (requires root)
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[clap(long, requires = "service_user")]
+    pub system: bool,
+
+    /// Non-root account for a system service
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[clap(long, requires = "system")]
+    pub service_user: Option<String>,
+
     /// Command to run as a service
     #[clap(required(true), last(true))]
     pub command: Vec<String>,

@@ -1,22 +1,20 @@
 # 實作進度
 
-## 已完成（程式碼已提交，尚未編譯）
-- 建立 develop 與 feature/cross-platform；確認實作開始時功能分支未落後 develop。
-- 審查 CLI、main、Windows service/control/Job Object、child binary、既有測試及 CI。
-- 分離 Windows 專屬相依與 API，build.rs 依目標平台決定是否編譯 resource；保留 Windows CLI 與服務實作。
-- Linux 初版：systemd user unit 產生、註冊、原生管理、重複註冊防護、載入路徑驗證、失敗清理、基本驗證與單元測試；不直接啟動或 enable。
-- macOS 暫時提供 CLI 與明確未實作錯誤，尚無 launchd backend。
-- 新增 docs/platforms.md，記錄支援範圍及差異。
-- 擴充既有 GitHub Actions test job 為 Windows/Ubuntu/macOS 矩陣，保留既有 Windows build/lint 工作。
+## 已完成（已實作，尚未編譯驗證）
+- 分支建立，實作開始時確認未落後 develop；保留原有 Windows 服務實作。
+- Windows 相依及 build resource 分離，既有 CLI 平台分派。
+- Linux systemd user/system 服務定義產生、註冊、載入檔案驗證與失敗清理。
+- macOS launchd gui/system plist 產生、註冊、plutil 驗證；原生管理指令由管理者操作。
+- Unix 系統級註冊須指定非 root 服務帳號，共用安全檔案建立與名稱驗證。
+- 新增單元測試（scope、引數/XML escaping、環境變數、重複檔案防護與重啟策略），更新平台文件與三平台 CI test matrix。
 
 ## 驗證與限制
-- 本次環境無 Rust 工具鏈，且無法從容器連 GitHub，因此未執行 cargo check/test。
-- 使用本地 systemd-analyze 257 verify 檢查代表性 ExecStart、Environment、restart/stop unit 語法；非 Rust 產出實測，不能視為整合測試通過。
-- 截至 CI 設定提交後查詢，Actions 執行數：0；尚無三平台成功測試證據。
-- Linux 使用者服務先行，系統級服務、更多選項及 macOS 尚待實作。Windows 仍須回歸測試。
+- 本次容器確實無 cargo/rustc；未編譯或執行 Rust 測試。前次代表性 systemd unit 語法檢查不是原生整合驗證。
+- 開始本次實作時，查詢 HEAD Actions 執行數為 0；尚無三平台測試成功證據。
+- macOS 系統級服務初版需要 --no-log 或 --no-log-cmd；使用者日誌無內建輪替；兩平台無法等價映射的選項明確拒絕。launchd 未載入的其他 plist 標籤衝突仍待加強。
+- Windows 原有 SCM/Job Object 程式碼未修改，但回歸測試仍須執行。
 
 ## 下一步
-- 確認三平台 CI 實際執行結果；修正編譯或測試問題。若 Fork Actions 未啟用，需由管理者確認設定。
-- Linux 實機驗證 user manager、參數保真、重複註冊、重啟與停止；再評估 system scope。
-- 實作 launchd，補齊平台差異、文件與驗收。
-- TOML、.env、統一 CRUD CLI 與 mise 專屬整合不在本期範圍。
+- 確認 GitHub Fork Actions 啟用狀態與三平台 CI 結果，修正實際編譯、格式及測試問題。
+- Linux/macOS 原生 user/system 實機整合驗收：參數保真、服務帳號、重複註冊、重啟、停機、日誌、開機/登入載入與失敗清理。
+- 補齊確有必要的原生差異處理，不新增 TOML/.env/mise 或統一 CRUD CLI。

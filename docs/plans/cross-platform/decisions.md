@@ -9,3 +9,6 @@
 - 2026-11-26：縮減跨平台範圍，取代原共用 ServiceSpec/ServiceManager、TOML、dotenv 與統一管理 CLI 的本期規劃。保留 Windows 實作，僅新增 Linux/systemd 與 macOS/launchd；必要時才抽離共用邏輯。設定檔及管理 CLI 延後獨立開發，降低回歸與上游同步成本。
 
 - Linux 初版採 systemd 使用者服務，不預設 root、不直接啟動或 enable；原生管理器負責重啟、停止與 cgroup 清理。先驗證有限選項，再擴充 system scope 與 macOS。拒絕未支援選項，環境變數不承諾秘密保護。
+
+- Linux/macOS 新增 Unix 專屬 --system 與 --service-user，系統級註冊需 root 且服務帳號不得為 UID 0。user scope 拒絕 root。Windows CLI 不變。
+- macOS 使用原生 LaunchAgent/LaunchDaemon，add 只寫入並 lint plist，不在當前 session bootstrap；標準目錄於下次登入/開機載入。使用 launchd SIGTERM、秒級逾時及 throttling；不承諾完整程序樹清理。系統級初版必須停用捕獲日誌；使用者日誌以原生路徑管理，無內建輪替。
