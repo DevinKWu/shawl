@@ -7,6 +7,10 @@ If you're creating a project that needs to run as a service,
 simply bundle Shawl with your project, set it as the entry point,
 and pass the command to run via CLI.
 
+## Cross-platform development
+
+See [native service support](docs/platforms.md) for experimental Linux support and current limitations. Windows remains the original supported platform.
+
 ## Installation
 * Prebuilt binaries are available on the
   [releases page](https://github.com/mtkennerly/shawl/releases).

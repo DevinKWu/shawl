@@ -8,9 +8,16 @@ fn parse_canonical_path(path: &str) -> Result<String, std::io::Error> {
     Ok(std::fs::canonicalize(path)?.to_string_lossy().to_string())
 }
 
+#[cfg(windows)]
 fn parse_ensured_directory(path: &str) -> Result<String, std::io::Error> {
     std::fs::create_dir_all(path)?;
     Ok(std::fs::canonicalize(path)?.to_string_lossy().to_string())
+}
+
+#[cfg(not(windows))]
+fn parse_ensured_directory(path: &str) -> Result<String, std::io::Error> {
+    // Unsupported logging options must not create directories on Unix.
+    parse_canonical_path(path)
 }
 
 macro_rules! possible_values {
@@ -53,6 +60,7 @@ impl Priority {
 }
 
 impl Priority {
+    #[cfg(windows)]
     pub fn to_cli(self) -> String {
         match self {
             Self::Realtime => "realtime",
@@ -65,6 +73,7 @@ impl Priority {
         .to_string()
     }
 
+    #[cfg(windows)]
     pub fn to_windows(self) -> windows::Win32::System::Threading::PROCESS_CREATION_FLAGS {
         match self {
             Self::Realtime => windows::Win32::System::Threading::REALTIME_PRIORITY_CLASS,
@@ -101,6 +110,7 @@ pub enum LogRotation {
 }
 
 impl LogRotation {
+    #[cfg(windows)]
     pub fn to_cli(self) -> String {
         match self {
             LogRotation::Bytes(bytes) => format!("bytes={}", bytes),
@@ -334,12 +344,13 @@ pub enum Subcommand {
 #[clap(
     name = "shawl",
     version,
-    about = "Wrap arbitrary commands as Windows services",
     max_term_width = 100,
     subcommand_negates_reqs = true,
     next_line_help = true,
     styles = styles()
 )]
+#[cfg_attr(windows, clap(about = "Wrap arbitrary commands as Windows services"))]
+#[cfg_attr(not(windows), clap(about = "Register arbitrary commands as native services"))]
 pub struct Cli {
     #[clap(subcommand)]
     pub sub: Subcommand,

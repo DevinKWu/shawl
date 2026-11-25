@@ -1,6 +1,6 @@
 # Shawl 跨平台支援
 
-目前階段：縮減範圍後的架構規劃。下一步：完整審查現有 CLI、程序生命週期、child binary、CI 與測試，建立三平台編譯基線。
+目前階段：平台相依分離與 Linux 使用者服務初版實作，尚未編譯驗證。下一步：建立三平台編譯測試、Linux 原生整合測試，再補齊 system scope 與 macOS。
 
 ## 目標與範圍
 以最小改動擴充 Linux（systemd）及 macOS（launchd），保留 Windows SCM、Job Object、程序監控、既有 add/run CLI 與 MIT 授權。只抽離確有共用需求的邏輯，不強制新增 trait 或重寫 Windows 實作。Linux 僅承諾 systemd 環境。
@@ -20,11 +20,11 @@ flowchart TD
  Linux --> systemd
  MacOS --> launchd
 ```
-Unix 平台優先由原生管理器監督應用程式，不自行建立 daemon。既有 run 語意及無法等價映射的選項須先審查，明確文件化或拒絕，不靜默忽略。
+Unix 平台優先由原生管理器監督應用程式，不自行建立 daemon。Linux 初版以原生 systemctl 取代 run，僅接受絕對執行檔路徑；journal 取代 Shawl 自有日誌，詳細限制見 docs/platforms.md。既有 run 語意及無法等價映射的選項須先審查，明確文件化或拒絕，不靜默忽略。
 
 ## 實作順序
 1. 分離 Windows build resource、相依、模組、child binary 與測試；建立三平台 cargo check/test 基線，保持 Windows 行為。
-2. Linux：產生安全的 systemd unit，明確 system/user scope，處理 daemon-reload、註冊、原生重啟、cgroup 停止與 journal；避免 shell 插值。
+2. Linux：優先實作 user scope（不預設 root、不自動啟動或 enable）；驗證後再擴充 system scope。產生安全的 systemd unit，處理 daemon-reload、註冊、原生重啟、cgroup 停止與 journal；避免 shell 插值。
 3. macOS：產生安全的 launchd plist，明確 system/gui scope，處理 bootstrap/bootout、KeepAlive 語意、停止及日誌。
 4. 補齊平台相容性文件、權限檢查、安裝失敗清理及三平台驗收；不覆蓋非 Shawl 管理的服務。
 
