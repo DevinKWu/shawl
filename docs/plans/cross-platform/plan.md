@@ -3,7 +3,7 @@
 目前階段：架構規劃。下一步：建立三平台編譯基線，保留 Windows 行為。
 
 ## 需求
-支援 Windows SCM、Linux systemd、macOS launchd；統一 install/update/uninstall/start/stop/restart/status/logs；保留原有 Windows add/run CLI。支援 TOML、.env、mise（以絕對路徑執行，無須互動 shell）。不自行實作 Unix daemon 管理器。
+支援 Windows SCM、Linux systemd、macOS launchd；統一 install/update/uninstall/start/stop/restart/status/logs；保留原有 Windows add/run CLI。支援 TOML、.env。不自行實作 Unix daemon 管理器。
 
 ## 現況
 基準 b409acebe931c4cc2e6091f254cbaee912d0d637。src/main.rs 非 Windows 直接 panic；src/control.rs 使用 sc；src/service.rs 使用 Windows SCM 與 console；src/process_job.rs 使用 Job Object；build.rs 無條件編譯 Windows resource；Cargo.toml Windows 相依未分平台。
@@ -25,7 +25,7 @@ flowchart TD
 
 ## 實作順序
 1. 分離 Windows build resource、依賴、模組及測試；三平台 cargo check/test。
-2. TOML schema、嚴格驗證、路徑解析、dotenv 與 mise 啟動；秘密不得寫入命令列或日誌。
+2. TOML schema、嚴格驗證、路徑解析、dotenv 與通用執行指令；秘密不得寫入命令列或日誌。
 3. Windows adapter 與既有 CLI 相容；安裝更新具冪等性。
 4. systemd adapter：明確 system/user scope、daemon-reload、enable、start、journalctl；使用原生重啟及 cgroup 停止。
 5. launchd adapter：明確 system/gui scope、bootstrap/bootout/kickstart/print、日誌路徑；處理 KeepAlive 語意差異。
