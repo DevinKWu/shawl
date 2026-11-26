@@ -23,7 +23,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.7'
+          python-version: '3.11'
       - uses: mtkennerly/dunamai-action@v1
         with:
           env-var: DUNAMAI_VERSION
@@ -39,11 +39,28 @@ jobs:
           path: target/${{ matrix.rust-target }}/release/shawl.exe
 
   test:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test -- --test-threads 1
+        with:
+          components: clippy
+      - run: cargo check --locked --all-targets
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo build --locked
+      - run: cargo test --locked -- --test-threads 1
+      - name: Validate generated native service definitions
+        if: runner.os != 'Windows'
+        run: cargo test --locked --bin shawl -- --ignored
+      - name: Native system service lifecycle smoke test
+        if: runner.os != 'Windows'
+        timeout-minutes: 5
+        shell: bash
+        run: bash tests/native-smoke.sh system "$(pwd)/target/debug/shawl"
 
   lint:
     runs-on: windows-latest
@@ -51,7 +68,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.7'
+          python-version: '3.11'
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy

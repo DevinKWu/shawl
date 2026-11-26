@@ -479,7 +479,7 @@ speculate::speculate! {
 
             // Spawn long-running dummy command
             let mut child = std::process::Command::new("cmd")
-                .args(&["/C", "timeout", "/t", "60", "/nobreak"])
+                .args(["/C", "timeout", "/t", "60", "/nobreak"])
                 .spawn()
                 .unwrap();
 
@@ -509,7 +509,7 @@ speculate::speculate! {
             let job = ProcessJob::create_kill_on_close().unwrap();
 
             // Parent process spawns a grandchild
-            let child = std::process::Command::new("powershell")
+            let mut child = std::process::Command::new("powershell")
                 .arg("-NoProfile")
                 .arg("-Command")
                 .arg("Start-Process powershell -ArgumentList '-NoProfile','-Command','Start-Sleep 60'; Start-Sleep 60")
@@ -546,8 +546,7 @@ speculate::speculate! {
             system.refresh_all();
 
             // Parent should be dead
-            let parent_alive = system.process(Pid::from_u32(parent_pid)).is_some();
-            assert!(!parent_alive, "Parent should be terminated");
+            assert!(child.try_wait().expect("Failed to poll parent process status").is_some(), "Parent should be terminated");
 
             // Grandchildren should be dead too
             for gc_pid in grandchildren {

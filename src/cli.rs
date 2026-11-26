@@ -5,12 +5,26 @@ pub fn evaluate_cli() -> Cli {
 }
 
 fn parse_canonical_path(path: &str) -> Result<String, std::io::Error> {
-    Ok(std::fs::canonicalize(path)?.to_string_lossy().to_string())
+    let canonical = std::fs::canonicalize(path)?;
+    #[cfg(windows)]
+    return Ok(canonical.to_string_lossy().into_owned());
+    #[cfg(not(windows))]
+    canonical
+        .into_os_string()
+        .into_string()
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Canonical path is not valid UTF-8"))
 }
 
+#[cfg(windows)]
 fn parse_ensured_directory(path: &str) -> Result<String, std::io::Error> {
     std::fs::create_dir_all(path)?;
     Ok(std::fs::canonicalize(path)?.to_string_lossy().to_string())
+}
+
+#[cfg(not(windows))]
+fn parse_ensured_directory(path: &str) -> Result<String, std::io::Error> {
+    // Unsupported logging options must not create directories on Unix.
+    parse_canonical_path(path)
 }
 
 macro_rules! possible_values {
@@ -53,6 +67,7 @@ impl Priority {
 }
 
 impl Priority {
+    #[cfg(windows)]
     pub fn to_cli(self) -> String {
         match self {
             Self::Realtime => "realtime",
@@ -65,6 +80,7 @@ impl Priority {
         .to_string()
     }
 
+    #[cfg(windows)]
     pub fn to_windows(self) -> windows::Win32::System::Threading::PROCESS_CREATION_FLAGS {
         match self {
             Self::Realtime => windows::Win32::System::Threading::REALTIME_PRIORITY_CLASS,
@@ -101,6 +117,7 @@ pub enum LogRotation {
 }
 
 impl LogRotation {
+    #[cfg(windows)]
     pub fn to_cli(self) -> String {
         match self {
             LogRotation::Bytes(bytes) => format!("bytes={}", bytes),
@@ -231,7 +248,14 @@ pub struct CommonOpts {
     #[clap(long)]
     pub no_log_cmd: bool,
 
-    /// Write log file to a custom directory. This directory will be created if it doesn't exist.
+    #[cfg_attr(
+        windows,
+        doc = "Write log file to a custom directory. This directory will be created if it doesn't exist."
+    )]
+    #[cfg_attr(
+        not(windows),
+        doc = "Write command logs to an existing directory (macOS user services only)"
+    )]
     #[clap(long, value_name = "path", value_parser = parse_ensured_directory)]
     pub log_dir: Option<String>,
 
@@ -290,6 +314,16 @@ pub struct CommonOpts {
     #[clap(long)]
     pub interactive: bool,
 
+    /// Register a system service instead of a user service (requires root)
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[clap(long, requires = "service_user")]
+    pub system: bool,
+
+    /// Non-root account for a system service
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[clap(long, requires = "system")]
+    pub service_user: Option<String>,
+
     /// Command to run as a service
     #[clap(required(true), last(true))]
     pub command: Vec<String>,
@@ -334,12 +368,13 @@ pub enum Subcommand {
 #[clap(
     name = "shawl",
     version,
-    about = "Wrap arbitrary commands as Windows services",
     max_term_width = 100,
     subcommand_negates_reqs = true,
     next_line_help = true,
     styles = styles()
 )]
+#[cfg_attr(windows, clap(about = "Wrap arbitrary commands as Windows services"))]
+#[cfg_attr(not(windows), clap(about = "Register arbitrary commands as native services"))]
 pub struct Cli {
     #[clap(subcommand)]
     pub sub: Subcommand,
@@ -365,7 +400,7 @@ speculate::speculate! {
     }
 
     fn p(path: &str) -> String {
-        std::fs::canonicalize(&path).unwrap().to_string_lossy().to_string()
+        std::fs::canonicalize(path).unwrap().to_string_lossy().to_string()
     }
 
     describe "run subcommand" {
@@ -1108,6 +1143,43 @@ speculate::speculate! {
                         }
                     }
                 },
+            );
+        }
+    }
+}
+
+#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
+mod native_cli_tests {
+    use super::*;
+
+    #[test]
+    fn system_scope_requires_explicit_account() {
+        let parsed = Cli::try_parse_from([
+            "shawl",
+            "add",
+            "--name",
+            "app",
+            "--system",
+            "--service-user",
+            "appuser",
+            "--",
+            "/bin/sh",
+        ])
+        .unwrap();
+        match parsed.sub {
+            Subcommand::Add { common, .. } => {
+                assert!(common.system);
+                assert_eq!(common.service_user.as_deref(), Some("appuser"));
+            }
+            _ => panic!("expected add"),
+        }
+        for flag in [vec!["--system"], vec!["--service-user", "appuser"]] {
+            let mut args = vec!["shawl", "add", "--name", "app"];
+            args.extend(flag);
+            args.extend(["--", "/bin/sh"]);
+            assert_eq!(
+                Cli::try_parse_from(args).unwrap_err().kind(),
+                clap::error::ErrorKind::MissingRequiredArgument
             );
         }
     }

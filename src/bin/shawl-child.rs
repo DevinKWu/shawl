@@ -65,12 +65,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("shawl-child message on stderr");
 
     if cli.send_ctrlc {
-        info!("Sending ctrl-C event");
-        unsafe {
-            windows::Win32::System::Console::GenerateConsoleCtrlEvent(windows::Win32::System::Console::CTRL_C_EVENT, 0)
+        #[cfg(not(windows))]
+        return Err("--send-ctrlc is a Windows-specific test option".into());
+        #[cfg(windows)]
+        {
+            info!("Sending ctrl-C event");
+            unsafe {
+                windows::Win32::System::Console::GenerateConsoleCtrlEvent(
+                    windows::Win32::System::Console::CTRL_C_EVENT,
+                    0,
+                )
                 .unwrap();
+            }
+            info!("Sent ctrl-C event");
         }
-        info!("Sent ctrl-C event");
     }
 
     if cli.spawn_grandchild {

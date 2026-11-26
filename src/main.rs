@@ -1,20 +1,30 @@
 mod cli;
+#[cfg(windows)]
 mod control;
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+mod native;
 #[cfg(windows)]
 mod process_job;
 #[cfg(windows)]
 mod service;
 
 use crate::cli::{Subcommand, evaluate_cli};
+#[cfg(windows)]
 use log::{debug, error};
 
 /// Simplify local UNC paths since some programs (notably cmd.exe) don't like them.
+#[cfg(windows)]
 pub fn simplify_path(path: &str) -> String {
     dunce::simplified(std::path::Path::new(path))
         .to_string_lossy()
         .to_string()
 }
 
+#[cfg(windows)]
 fn prepare_logging(
     name: &str,
     log_dir: Option<&String>,
@@ -147,7 +157,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[cfg(not(windows))]
-fn main() {
-    panic!("This program is only intended to run on Windows.");
+#[cfg(target_os = "linux")]
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    match evaluate_cli().sub {
+        Subcommand::Add {
+            name,
+            cwd,
+            dependencies,
+            common,
+        } => linux::add_service(&name, cwd.as_deref(), &dependencies, &common),
+        Subcommand::Run { .. } => {
+            Err("On Linux, start the registered service using systemctl (with --user for a user service).".into())
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    match evaluate_cli().sub {
+        Subcommand::Add {
+            name,
+            cwd,
+            dependencies,
+            common,
+        } => macos::add_service(&name, cwd.as_deref(), &dependencies, &common),
+        Subcommand::Run { .. } => Err("On macOS, load and start the registered service using launchctl.".into()),
+    }
+}
+
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    match evaluate_cli().sub {
+        Subcommand::Add { .. } | Subcommand::Run { .. } => {
+            Err("Native service registration is not implemented on this platform yet.".into())
+        }
+    }
 }
