@@ -51,6 +51,13 @@ jobs:
       - name: Validate generated native service definitions
         if: runner.os != 'Windows'
         run: cargo test --locked --bin shawl -- --ignored
+      - name: Native system service lifecycle smoke test
+        if: runner.os != 'Windows'
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          cargo build --locked --bin shawl
+          bash tests/native-smoke.sh system "$(pwd)/target/debug/shawl"
 
   lint:
     runs-on: windows-latest

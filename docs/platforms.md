@@ -118,3 +118,27 @@ Before release, separately exercise user/system registration, service
 identity, exact argv/env/cwd, start and stop, normal/failing exit, restart,
 descendant cleanup, duplicate names, permissions, and reboot/login
 persistence in disposable native test environments.
+
+### Native lifecycle smoke test
+
+On a disposable Linux/systemd or macOS/launchd machine, build the binary
+and run the smoke test as an ordinary non-root account:
+
+```sh
+cargo build --locked --bin shawl
+bash tests/native-smoke.sh user "$(pwd)/target/debug/shawl"
+sudo -v
+bash tests/native-smoke.sh system "$(pwd)/target/debug/shawl"
+```
+
+User scope needs an active systemd user manager or macOS GUI domain.
+System scope needs non-interactive sudo and registers the service under the
+invoking account, never root. The test creates a unique temporary service,
+checks literal arguments (including empty arguments and special characters),
+environment, cwd, UID, rejection of duplicate registration, restart after
+forced failure, and a graceful native stop. It stops/unloads its test service
+and removes the definition; if stopping fails, it preserves the definition
+and fixture for diagnosis. It does not test reboot/login persistence,
+logging retention or arbitrary descendant cleanup. Do not run on production
+machines. Hosted Linux/macOS CI executes the system scope test; user scope
+remains a native manual acceptance check.
