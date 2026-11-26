@@ -14,3 +14,8 @@
 - macOS 使用原生 LaunchAgent/LaunchDaemon，add 只寫入並 lint plist，不在當前 session bootstrap；標準目錄於下次登入/開機載入。使用 launchd SIGTERM、秒級逾時及 throttling；不承諾完整程序樹清理。系統級初版必須停用捕獲日誌；使用者日誌以原生路徑管理，無內建輪替。
 
 - 安全性 Review：服務定義改為私有 staging、完整寫入後原子發布（同一檔案系統 hard link，不覆蓋）；macOS 發布前執行 lint、檢查標準目錄既有 Label，無法檢查時拒絕註冊。Linux system scope 不繼承可能改變 bus 的環境，驗證有效 User。原生管理者自訂 overrides 仍需管理者審查。
+
+- 2026-11-26：Unix 註冊要求目標為有執行權限位元的絕對檔案路徑。CLI 解析到非 UTF-8 的實際路徑時拒絕註冊，避免把路徑轉換成其他檔名。Windows 路徑解析沿用原有行為。
+- 2026-11-26：systemd 語法測試使用隔離的使用者執行期目錄及 `systemd-analyze --user verify`。三平台工作流程執行 `check`、`clippy`、`build` 和 `test`，原生服務結果依實際 runner 或 VM 紀錄。
+- 2026-11-26：systemd 240 才支援 `Type=exec`。註冊時檢查載入的服務型別，避免舊版或覆寫將該設定改成其他型別時仍回報成功。
+- 2026-11-26：RustSec `RUSTSEC-2026-0204` 以鎖檔的 `crossbeam-epoch` 0.9.20 修補。`chrono` 的上游停止維護警告另行追蹤，現有公告無修補版。

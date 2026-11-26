@@ -1,6 +1,6 @@
 # Shawl 跨平台支援
 
-目前階段：三平台原生註冊初版與安全性 Review 修正，尚未編譯驗證。下一步：確認 CI 啟用、編譯及原生整合驗收。
+目前階段：跨平台 Review 與原生驗收。[草稿 PR #1](https://github.com/DevinKWu/shawl/pull/1) 目標為 `develop`。Linux 已通過 Rust 驗證和 systemd 原生驗收。Windows/macOS 已通過交叉檢查，原生驗收待 GitHub Actions 啟用與實機驗證。證據見 [progress.md](progress.md)。
 
 ## 目標與範圍
 以最小改動擴充 Linux（systemd）及 macOS（launchd），保留 Windows SCM、Job Object、程序監控、既有 add/run CLI 與 MIT 授權。只抽離確有共用需求的邏輯，不強制新增 trait 或重寫 Windows 實作。Linux 僅承諾 systemd 環境。
@@ -29,7 +29,7 @@ Unix 平台優先由原生管理器監督應用程式，不自行建立 daemon�
 4. 補齊平台相容性文件、權限檢查、安裝失敗清理及三平台驗收；不覆蓋任何既有服務檔案；Unix 使用同檔案系統私有 staging 與原子 hard link 發布；macOS 先驗證 plist 並檢查標準目錄 label 衝突；systemd 驗證載入路徑與系統級有效 User。
 
 ## 驗收
-三平台編譯及單元測試；Windows 既有整合測試無回歸；Linux/macOS 以 tests/native-smoke.sh 驗證原生服務生命週期（CI system scope，user scope 實機執行）；Linux/macOS 實機驗證註冊、原生啟停、開機或登入啟動（依 scope）、異常重啟、正常停止、子程序清理與日誌。測試空格及特殊字元路徑、既有環境變數參數、服務帳號權限、重複註冊及失敗清理；敏感資訊不得新增至日誌，服務設定限制存取權限。無法等價映射的功能須明確拒絕或記錄差異。未經實機驗證不得宣稱完成。
+三平台編譯及單元測試；Windows 既有整合測試無回歸；Linux/macOS 以 tests/native-smoke.sh 驗證原生服務生命週期（CI system scope，user scope 在原生環境執行）；Linux/macOS 實機驗證註冊、原生啟停、開機或登入啟動（依 scope）、異常重啟、正常停止、平台適用的子程序清理與日誌。測試空格及特殊字元路徑、既有環境變數參數、服務帳號權限、重複註冊及失敗清理；敏感資訊不得新增至日誌，服務設定限制存取權限。無法等價映射的功能須明確拒絕或記錄差異。PR 轉為 Ready 前需取得三平台的原生測試證據。
 
 ## 後續獨立功能（不屬於本期）
 - feature/config-file：TOML。
