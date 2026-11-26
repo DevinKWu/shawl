@@ -5,7 +5,14 @@ pub fn evaluate_cli() -> Cli {
 }
 
 fn parse_canonical_path(path: &str) -> Result<String, std::io::Error> {
-    Ok(std::fs::canonicalize(path)?.to_string_lossy().to_string())
+    let canonical = std::fs::canonicalize(path)?;
+    #[cfg(windows)]
+    return Ok(canonical.to_string_lossy().into_owned());
+    #[cfg(not(windows))]
+    canonical
+        .into_os_string()
+        .into_string()
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Canonical path is not valid UTF-8"))
 }
 
 #[cfg(windows)]
@@ -241,7 +248,14 @@ pub struct CommonOpts {
     #[clap(long)]
     pub no_log_cmd: bool,
 
-    /// Write log file to a custom directory. This directory will be created if it doesn't exist.
+    #[cfg_attr(
+        windows,
+        doc = "Write log file to a custom directory. This directory will be created if it doesn't exist."
+    )]
+    #[cfg_attr(
+        not(windows),
+        doc = "Write command logs to an existing directory (macOS user services only)"
+    )]
     #[clap(long, value_name = "path", value_parser = parse_ensured_directory)]
     pub log_dir: Option<String>,
 

@@ -55,9 +55,7 @@ fn render_unit(
     }
 
     let program = opts.command.first().ok_or("Missing executable")?;
-    if !Path::new(program).is_absolute() || !Path::new(program).is_file() {
-        return Err("The service executable must be an existing absolute file path".into());
-    }
+    native::check_executable(program)?;
 
     let args = opts.command.iter().map(|arg| quote(arg)).collect::<Result<Vec<_>>>()?;
     let restart = if opts.restart {
@@ -303,7 +301,11 @@ mod tests {
         options.command.extend(["".into(), "a b".into(), "a\\b".into()]);
         let unit = render_unit("shawl-test", Some("/tmp"), &[], &options, Scope::User).unwrap();
         native::write_new(&path, &unit).unwrap();
-        let output = Command::new("systemd-analyze").arg("verify").arg(&path).output();
+        let output = Command::new("systemd-analyze")
+            .env("XDG_RUNTIME_DIR", &dir)
+            .args(["--user", "verify"])
+            .arg(&path)
+            .output();
         fs::remove_dir_all(&dir).unwrap();
         let output = output.expect("systemd-analyze must be available");
         assert!(

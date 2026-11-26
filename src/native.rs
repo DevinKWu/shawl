@@ -3,7 +3,7 @@ use crate::cli::CommonOpts;
 use std::{
     fs::{self, DirBuilder, OpenOptions},
     io::Write,
-    os::unix::fs::{DirBuilderExt, OpenOptionsExt},
+    os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt},
     path::Path,
     process::Command,
     sync::atomic::{AtomicU64, Ordering},
@@ -119,6 +119,18 @@ pub fn valid_env_key(key: &str) -> bool {
         && bytes.all(|b| b.is_ascii_alphanumeric() || b == b'_')
 }
 
+pub fn check_executable(program: &str) -> Result<()> {
+    let path = Path::new(program);
+    if !path.is_absolute()
+        || !path
+            .metadata()
+            .is_ok_and(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
+    {
+        return Err("The service executable must be an existing executable file with an absolute path".into());
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -141,8 +153,20 @@ mod tests {
         write_new(&path, "original").unwrap();
         assert!(write_new(&path, "replacement").is_err());
         assert_eq!(fs::read_to_string(&path).unwrap(), "original");
-        use std::os::unix::fs::PermissionsExt;
         assert_eq!(fs::metadata(&path).unwrap().permissions().mode() & 0o077, 0);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn rejects_non_executable_files() {
+        let dir = std::env::temp_dir().join(format!("shawl-executable-test-{}", std::process::id()));
+        fs::create_dir(&dir).unwrap();
+        let path = dir.join("service");
+        write_new(&path, "#!/bin/sh\n").unwrap();
+        let program = path.to_str().unwrap();
+        assert!(check_executable(program).is_err());
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
+        assert!(check_executable(program).is_ok());
         fs::remove_dir_all(dir).unwrap();
     }
     #[test]

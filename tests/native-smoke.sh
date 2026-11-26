@@ -22,7 +22,9 @@ if [[ $scope == system ]]; then
 fi
 
 name="shawl-smoke-${uid}-$$-$(date +%s)"
-case $(uname -s) in
+os=$(uname -s)
+logging=()
+case $os in
     Linux)
         if [[ $scope == system ]]; then
             manager=(sudo -n systemctl --system)
@@ -33,6 +35,11 @@ case $(uname -s) in
         fi
         target=$name.service
         definition=$unit_dir/$target
+        if [[ $scope == system ]]; then
+            logs=(sudo -n journalctl --no-pager --output=cat --unit "$target")
+        else
+            logs=(journalctl --user --no-pager --output=cat --unit "$target")
+        fi
         start=("${manager[@]}" start "$target")
         stop=("${manager[@]}" stop "$target")
         inspect=("${manager[@]}" status --no-pager "$target")
@@ -42,6 +49,7 @@ case $(uname -s) in
         if [[ $scope == system ]]; then
             domain=system
             definition=/Library/LaunchDaemons/$label.plist
+            logging=(--no-log)
         else
             domain=gui/$uid
             definition=$HOME/Library/LaunchAgents/$label.plist
@@ -76,7 +84,7 @@ cleanup() {
             echo "Cleanup failed: $definition; fixture retained at $work" >&2
             exit 1
         fi
-        if [[ $(uname -s) == Linux ]] && ! "${manager[@]}" daemon-reload; then
+        if [[ $os == Linux ]] && ! "${manager[@]}" daemon-reload; then
             echo 'Cleanup daemon-reload failed' >&2
             exit 1
         fi
@@ -87,6 +95,14 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+
+cwd="$work/working & % directory"
+program="$work/sh & % executable"
+mkdir "$cwd"
+ln -s /bin/sh "$program"
+if [[ $os == Darwin && $scope == user ]]; then
+    logging=(--log-dir "$work")
+fi
 
 cat > "$work/fixture.sh" <<'FIXTURE'
 #!/bin/sh
@@ -99,17 +115,37 @@ set -eu
 [ "$(id -u)" = "$SHAWL_SMOKE_UID" ]
 [ "$(pwd -P)" = "$SHAWL_SMOKE_DIR" ]
 trap 'printf "%s\n" "$$" >> "$SHAWL_SMOKE_DIR/stops"; exit 0' INT TERM
+if [ "$SHAWL_SMOKE_OS" = Linux ]; then
+    sleep 600 &
+    printf '%s\n' "$!" >> "$SHAWL_SMOKE_DIR/children"
+fi
+printf 'shawl-smoke stdout\n'
+printf 'shawl-smoke stderr\n' >&2
 printf '%s\n' "$$" >> "$SHAWL_SMOKE_DIR/starts"
 while :; do sleep 1; done
 FIXTURE
 
 add=("${admin[@]}" "$shawl" add --name "$name" "${registration[@]}"
-    --cwd "$work" --restart --restart-delay 1000 --stop-timeout 5000 --no-log
+    --cwd "$cwd" --restart --restart-delay 1000 --stop-timeout 5000 "${logging[@]}"
     --env 'SHAWL_SMOKE_ENV=literal $HOME 100%'
-    --env "SHAWL_SMOKE_UID=$uid" --env "SHAWL_SMOKE_DIR=$work"
-    -- /bin/sh "$work/fixture.sh" 'space & % $HOME' '' 'quote " and \backslash')
+    --env "SHAWL_SMOKE_UID=$uid" --env "SHAWL_SMOKE_DIR=$cwd" --env "SHAWL_SMOKE_OS=$os"
+    -- "$program" "$work/fixture.sh" 'space & % $HOME' '' 'quote " and \backslash')
+if [[ $os == Linux && $scope == user ]]; then
+    # Force the client to write outside the active manager's unit search path.
+    invalid_config="$work/unloaded-config"
+    if XDG_CONFIG_HOME="$invalid_config" "${add[@]}"; then
+        echo 'Registration outside the systemd search path unexpectedly succeeded' >&2
+        exit 1
+    fi
+    [[ ! -e $invalid_config/systemd/user/$target ]]
+fi
 "${add[@]}"
 registered=1
+if [[ $os == Linux ]]; then
+    [[ $(stat -c %a "$definition") == 600 ]]
+else
+    [[ $(stat -f %Lp "$definition") == 600 ]]
+fi
 
 wait_lines() {
     local file=$1 minimum=$2
@@ -126,8 +162,8 @@ wait_lines() {
 }
 
 "${start[@]}"
-wait_lines "$work/starts" 1
-first_pid=$(head -n 1 "$work/starts")
+wait_lines "$cwd/starts" 1
+first_pid=$(head -n 1 "$cwd/starts")
 [[ $first_pid =~ ^[1-9][0-9]*$ ]]
 if "${add[@]}"; then
     echo 'Duplicate registration unexpectedly succeeded' >&2
@@ -135,14 +171,28 @@ if "${add[@]}"; then
 fi
 # The fixture runs as the invoking account, so no privileged kill is needed.
 kill -KILL "$first_pid"
-wait_lines "$work/starts" 2
-second_pid=$(tail -n 1 "$work/starts")
+wait_lines "$cwd/starts" 2
+second_pid=$(tail -n 1 "$cwd/starts")
 [[ $second_pid =~ ^[1-9][0-9]*$ && $second_pid != "$first_pid" ]]
 "${stop[@]}"
 stopped=1
-wait_lines "$work/stops" 1
-grep -Fxq "$second_pid" "$work/stops"
+wait_lines "$cwd/stops" 1
+grep -Fxq "$second_pid" "$cwd/stops"
 # A manager-initiated stop must not restart the fixture.
 sleep 2
-[[ $(wc -l < "$work/starts") -eq 2 ]]
-echo "PASS: $(uname -s) $scope registration, identity, argv/env/cwd, duplicate, restart and graceful stop"
+[[ $(wc -l < "$cwd/starts") -eq 2 ]]
+if [[ $os == Linux ]]; then
+    journal=$("${logs[@]}")
+    grep -Fxq 'shawl-smoke stdout' <<< "$journal"
+    grep -Fxq 'shawl-smoke stderr' <<< "$journal"
+    while read -r pid; do
+        if kill -0 "$pid" 2>/dev/null; then
+            echo "systemd left child $pid running after stop" >&2
+            exit 1
+        fi
+    done < "$cwd/children"
+elif [[ $scope == user ]]; then
+    grep -Fxq 'shawl-smoke stdout' "$work/$label.stdout.log"
+    grep -Fxq 'shawl-smoke stderr' "$work/$label.stderr.log"
+fi
+echo "PASS: $os $scope registration, identity, argv/env/cwd, duplicate, restart and graceful stop"

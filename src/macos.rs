@@ -69,9 +69,7 @@ fn render_plist(
         return Err("This option is not supported by the initial launchd backend; see docs/platforms.md".into());
     }
     let program = opts.command.first().ok_or("Missing executable")?;
-    if !Path::new(program).is_absolute() || !Path::new(program).is_file() {
-        return Err("The service executable must be an existing absolute file path".into());
-    }
+    native::check_executable(program)?;
 
     let mut out = String::from(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n",

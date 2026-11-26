@@ -132,13 +132,17 @@ bash tests/native-smoke.sh system "$(pwd)/target/debug/shawl"
 ```
 
 User scope needs an active systemd user manager or macOS GUI domain.
+On Linux, the invoking account must be able to read its user journal.
 System scope needs non-interactive sudo and registers the service under the
 invoking account, never root. The test creates a unique temporary service,
-checks literal arguments (including empty arguments and special characters),
-environment, cwd, UID, rejection of duplicate registration, restart after
-forced failure, and a graceful native stop. It stops/unloads its test service
+checks literal arguments (including empty arguments), special characters in
+paths, environment, cwd, UID, service file permissions, duplicate rejection,
+restart after forced failure, and a graceful native stop. On Linux it checks
+journal output and child cleanup in both scopes, and failed-registration
+cleanup in user scope. On macOS it checks output files in user scope.
+It stops/unloads its test service
 and removes the definition; if stopping fails, it preserves the definition
 and fixture for diagnosis. It does not test reboot/login persistence,
-logging retention or arbitrary descendant cleanup. Do not run on production
-machines. Hosted Linux/macOS CI executes the system scope test; user scope
-remains a native manual acceptance check.
+logging retention or creation of process trees outside the manager's control.
+Do not run on production machines. Hosted Linux/macOS CI runs the system scope
+test. User scope is a native manual acceptance check.

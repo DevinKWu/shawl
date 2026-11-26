@@ -200,7 +200,7 @@ speculate::speculate! {
             let log = std::fs::read_to_string(log_file()).unwrap();
             // Example log content, without escaping: "PATH: C:\tmp;\\?\C:\git\shawl\target"
             let pattern = regex::Regex::new(
-                &format!(r#"PATH: .+{}"#, &log_custom_dir().replace('/', "\\").replace('\\', "\\\\\\\\"))
+                &format!(r#"PATH: .+{}"#, log_custom_dir().replace('/', "\\").replace('\\', "\\\\\\\\"))
             ).unwrap();
             assert!(pattern.is_match(&log));
         }
@@ -216,7 +216,7 @@ speculate::speculate! {
             let log = std::fs::read_to_string(log_file()).unwrap();
             // Example log content, without escaping: "PATH: C:\tmp;\\?\C:\git\shawl\target"
             let pattern = regex::Regex::new(
-                &format!(r#"PATH: .+{}"#, &extra_path.replace('/', "\\").replace('\\', "\\\\\\\\"))
+                &format!(r#"PATH: .+{}"#, extra_path.replace('/', "\\").replace('\\', "\\\\\\\\"))
             ).unwrap();
             assert!(pattern.is_match(&log));
         }
@@ -252,7 +252,7 @@ speculate::speculate! {
             run_cmd(&["sc", "stop", "shawl"]);
 
             let log = std::fs::read_to_string(log_file()).unwrap();
-            println!(">>>>>>> {}", &log);
+            println!(">>>>>>> {}", log);
             assert!(log.contains("[INFO] Command exited with code -1073741510"));
 
             let sc_output = run_cmd(&["sc", "query", "shawl"]);
@@ -270,7 +270,7 @@ speculate::speculate! {
             run_cmd(&["sc", "stop", "shawl"]);
 
             let log = std::fs::read_to_string(log_file()).unwrap();
-            println!(">>>>>>> {}", &log);
+            println!(">>>>>>> {}", log);
 
             let sc_output = run_cmd(&["sc", "query", "shawl"]);
             let stdout = String::from_utf8_lossy(&sc_output.stdout);
