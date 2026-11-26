@@ -180,7 +180,7 @@ pub fn add_service(name: &str, cwd: Option<&str>, dependencies: &[String], opts:
     // for a missing or shadowed unit.
     let verification = (|| -> Result<()> {
         let output = systemctl(scope)
-            .args(["show", "--property=LoadState,FragmentPath,User", "--", &filename])
+            .args(["show", "--property=LoadState,FragmentPath,Type,User", "--", &filename])
             .output()?;
         if !output.status.success() {
             return Err("Unable to inspect registered unit".into());
@@ -192,6 +192,12 @@ pub fn add_service(name: &str, cwd: Option<&str>, dependencies: &[String], opts:
         if !loaded || fragment.and_then(|p| fs::canonicalize(p).ok()).as_ref() != Some(&expected) {
             return Err(
                 "The systemd manager did not load the generated unit; check its configuration directory".into(),
+            );
+        }
+        if !stdout.lines().any(|line| line == "Type=exec") {
+            return Err(
+                "The service requires Type=exec (systemd 240 or newer); check the manager version and native overrides"
+                    .into(),
             );
         }
         if let Scope::System(user) = scope {

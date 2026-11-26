@@ -30,11 +30,11 @@ sudo journalctl -u my-app.service
 sudo systemctl disable --now my-app.service
 ```
 
-Use an active systemd manager. User units are installed under
+Use an active systemd 240 or newer manager with `Type=exec` support. User units are installed under
 `$XDG_CONFIG_HOME/systemd/user` (default `~/.config/systemd/user`); system
 units under `/etc/systemd/system`. Shawl refuses existing units, reloads
-the manager, verifies the loaded fragment and (for system services) the effective
-User property, and cleans up failed registration. Native administrator overrides
+the manager, verifies the loaded fragment, service type and (for system services)
+effective User property, and cleans up failed registration. Native administrator overrides
 remain under the administrator's control.
 It does not start or enable the unit. To remove, stop and disable it first,
 remove only the generated file, and run `systemctl daemon-reload` (add
@@ -43,7 +43,8 @@ lingering if they must start at boot without a login.
 
 ## macOS (launchd)
 
-User services use the current GUI login domain. Registration writes a
+Registration requires `launchctl bootstrap` and `plutil -extract` with the `raw`
+format. User services use the current GUI login domain. Registration writes a
 LaunchAgent plist, without bootstrapping the current session. The label is
 `org.shawl.<name>`. Jobs in the standard directory load on subsequent login;
 the generated job uses RunAtLoad, so bootstrap starts it immediately.
