@@ -1,6 +1,6 @@
 # Native service support (development branch)
 
-Windows behavior remains unchanged. Linux uses systemd, macOS uses launchd.
+Windows uses SCM, Linux uses systemd, and macOS uses launchd.
 Shawl registers a native service definition and exits; no extra persistent
 supervisor is introduced. Native manager commands control the service.
 All Unix backends require an absolute executable path. These implementations
