@@ -3,7 +3,11 @@ use crate::{
     cli::CommonOpts,
     native::{self, Result, Scope},
 };
-use std::{fs, path::{Path, PathBuf}, process::Command};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 fn no_control_chars(value: &str) -> Result<()> {
     if value.chars().any(char::is_control) {
@@ -22,7 +26,13 @@ fn quote(value: &str) -> Result<String> {
     ))
 }
 
-fn render_unit(name: &str, cwd: Option<&str>, dependencies: &[String], opts: &CommonOpts, scope: Scope<'_>) -> Result<String> {
+fn render_unit(
+    name: &str,
+    cwd: Option<&str>,
+    dependencies: &[String],
+    opts: &CommonOpts,
+    scope: Scope<'_>,
+) -> Result<String> {
     if !native::valid_name(name) || name.ends_with(".service") {
         return Err("Service name must start with an ASCII letter or digit and contain only letters, digits, '.', '_' or '-' (no .service suffix, maximum 100 bytes)".into());
     }
@@ -75,10 +85,15 @@ fn render_unit(name: &str, cwd: Option<&str>, dependencies: &[String], opts: &Co
     if let Some(cwd) = cwd {
         no_control_chars(cwd)?;
         // WorkingDirectory is a path value, not a word list; do not shell-quote it.
-        if !Path::new(cwd).is_absolute() || !Path::new(cwd).is_dir() || cwd.ends_with(char::is_whitespace)
+        if !Path::new(cwd).is_absolute()
+            || !Path::new(cwd).is_dir()
+            || cwd.ends_with(char::is_whitespace)
             || cwd.contains('\\')
         {
-            return Err("Working directory must be an existing absolute directory without backslashes or trailing whitespace".into());
+            return Err(
+                "Working directory must be an existing absolute directory without backslashes or trailing whitespace"
+                    .into(),
+            );
         }
         unit.push_str(&format!("WorkingDirectory={}\n", cwd.replace('%', "%%")));
     }
@@ -158,7 +173,8 @@ pub fn add_service(name: &str, cwd: Option<&str>, dependencies: &[String], opts:
     native::write_new(&path, &unit)?;
     if let Err(error) = reload(scope) {
         fs::remove_file(&path).map_err(|cleanup| format!("Reload failed ({error}); cleanup failed ({cleanup})"))?;
-        reload(scope).map_err(|cleanup| format!("Reload failed ({error}); unit removed but reload failed ({cleanup})"))?;
+        reload(scope)
+            .map_err(|cleanup| format!("Reload failed ({error}); unit removed but reload failed ({cleanup})"))?;
         return Err(error);
     }
     // The invoking shell and the user manager can have different XDG paths.
@@ -176,19 +192,25 @@ pub fn add_service(name: &str, cwd: Option<&str>, dependencies: &[String], opts:
         let fragment = stdout.lines().find_map(|line| line.strip_prefix("FragmentPath="));
         let expected = fs::canonicalize(&path)?;
         if !loaded || fragment.and_then(|p| fs::canonicalize(p).ok()).as_ref() != Some(&expected) {
-            return Err("The systemd manager did not load the generated unit; check its configuration directory".into());
+            return Err(
+                "The systemd manager did not load the generated unit; check its configuration directory".into(),
+            );
         }
         if let Scope::System(user) = scope {
             let effective_user = stdout.lines().find_map(|line| line.strip_prefix("User="));
             if effective_user != Some(user) {
-                return Err("The effective systemd User differs from the requested account; check native overrides".into());
+                return Err(
+                    "The effective systemd User differs from the requested account; check native overrides".into(),
+                );
             }
         }
         Ok(())
     })();
     if let Err(error) = verification {
-        fs::remove_file(&path).map_err(|cleanup| format!("Verification failed ({error}); cleanup failed ({cleanup})"))?;
-        reload(scope).map_err(|cleanup| format!("Verification failed ({error}); unit removed but reload failed ({cleanup})"))?;
+        fs::remove_file(&path)
+            .map_err(|cleanup| format!("Verification failed ({error}); cleanup failed ({cleanup})"))?;
+        reload(scope)
+            .map_err(|cleanup| format!("Verification failed ({error}); unit removed but reload failed ({cleanup})"))?;
         return Err(error);
     }
     let flag = match scope {
@@ -248,7 +270,11 @@ mod tests {
     #[test]
     fn restart_and_logging_policy() {
         let mut options = opts();
-        assert!(render_unit("test", None, &[], &options, Scope::User).unwrap().contains("Restart=on-failure"));
+        assert!(
+            render_unit("test", None, &[], &options, Scope::User)
+                .unwrap()
+                .contains("Restart=on-failure")
+        );
         options.restart = true;
         options.restart_delay = Some(500);
         options.no_log = true;
@@ -280,6 +306,10 @@ mod tests {
         let output = Command::new("systemd-analyze").arg("verify").arg(&path).output();
         fs::remove_dir_all(&dir).unwrap();
         let output = output.expect("systemd-analyze must be available");
-        assert!(output.status.success(), "systemd-analyze verify: {}", String::from_utf8_lossy(&output.stderr));
+        assert!(
+            output.status.success(),
+            "systemd-analyze verify: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 }

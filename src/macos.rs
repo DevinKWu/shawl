@@ -14,11 +14,18 @@ use std::{
 fn xml(value: &str) -> Result<String> {
     // Reject control characters (including CR, which XML normalizes) and
     // invalid XML scalars instead of silently changing an argument.
-    if value.chars().any(|c| c.is_control() || c == '\u{fffe}' || c == '\u{ffff}') {
+    if value
+        .chars()
+        .any(|c| c.is_control() || c == '\u{fffe}' || c == '\u{ffff}')
+    {
         return Err("Control characters or invalid XML characters are not supported in launchd values".into());
     }
-    Ok(value.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
-        .replace('"', "&quot;").replace('\'', "&apos;"))
+    Ok(value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;"))
 }
 
 fn label(name: &str) -> Result<String> {
@@ -66,7 +73,9 @@ fn render_plist(
         return Err("The service executable must be an existing absolute file path".into());
     }
 
-    let mut out = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n");
+    let mut out = String::from(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n",
+    );
     out.push_str(&format!("  <key>Label</key><string>{label}</string>\n"));
     out.push_str("  <key>ProgramArguments</key><array>\n");
     for arg in &opts.command {
@@ -83,9 +92,15 @@ fn render_plist(
     } else {
         "  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>\n"
     });
-    out.push_str(&format!("  <key>ExitTimeOut</key><integer>{}</integer>\n", seconds(opts.stop_timeout.unwrap_or(3000))?));
+    out.push_str(&format!(
+        "  <key>ExitTimeOut</key><integer>{}</integer>\n",
+        seconds(opts.stop_timeout.unwrap_or(3000))?
+    ));
     if let Some(delay) = opts.restart_delay {
-        out.push_str(&format!("  <key>ThrottleInterval</key><integer>{}</integer>\n", seconds(delay)?));
+        out.push_str(&format!(
+            "  <key>ThrottleInterval</key><integer>{}</integer>\n",
+            seconds(delay)?
+        ));
     }
     if let Scope::System(user) = scope {
         out.push_str(&format!("  <key>UserName</key><string>{}</string>\n", xml(user)?));
@@ -94,7 +109,10 @@ fn render_plist(
         if !Path::new(cwd).is_absolute() || !Path::new(cwd).is_dir() {
             return Err("Working directory must be an existing absolute directory".into());
         }
-        out.push_str(&format!("  <key>WorkingDirectory</key><string>{}</string>\n", xml(cwd)?));
+        out.push_str(&format!(
+            "  <key>WorkingDirectory</key><string>{}</string>\n",
+            xml(cwd)?
+        ));
     }
     let mut env = BTreeMap::new();
     for (key, value) in &opts.env {
@@ -106,7 +124,11 @@ fn render_plist(
     if !env.is_empty() {
         out.push_str("  <key>EnvironmentVariables</key><dict>\n");
         for (key, value) in env {
-            out.push_str(&format!("    <key>{}</key><string>{}</string>\n", xml(key)?, xml(value)?));
+            out.push_str(&format!(
+                "    <key>{}</key><string>{}</string>\n",
+                xml(key)?,
+                xml(value)?
+            ));
         }
         out.push_str("  </dict>\n");
     }
@@ -124,7 +146,10 @@ fn render_plist(
         if !dir.is_absolute() || !dir.is_dir() {
             return Err("Log directory must be an existing absolute directory".into());
         }
-        (dir.join(format!("{label}.stdout.log")), dir.join(format!("{label}.stderr.log")))
+        (
+            dir.join(format!("{label}.stdout.log")),
+            dir.join(format!("{label}.stderr.log")),
+        )
     };
     for (key, path) in [("StandardOutPath", stdout), ("StandardErrorPath", stderr)] {
         let path = path.to_str().ok_or("Log path must be valid UTF-8")?;
@@ -172,40 +197,66 @@ pub fn add_service(name: &str, cwd: Option<&str>, dependencies: &[String], opts:
             if !home.is_absolute() {
                 return Err("HOME must be absolute".into());
             }
-            let log_dir = opts.log_dir.as_ref().map(PathBuf::from).unwrap_or_else(|| home.join("Library/Logs"));
-            (format!("gui/{}", native::current_uid()?), home.join("Library/LaunchAgents"), Some(log_dir))
+            let log_dir = opts
+                .log_dir
+                .as_ref()
+                .map(PathBuf::from)
+                .unwrap_or_else(|| home.join("Library/Logs"));
+            (
+                format!("gui/{}", native::current_uid()?),
+                home.join("Library/LaunchAgents"),
+                Some(log_dir),
+            )
         }
         Scope::System(_) => ("system".to_string(), PathBuf::from("/Library/LaunchDaemons"), None),
     };
     let plist = render_plist(name, cwd, dependencies, opts, scope, log_dir.as_deref())?;
     let target = format!("{domain}/{label}");
-    if !Command::new("/bin/launchctl").args(["print", &domain]).output()?.status.success() {
+    if !Command::new("/bin/launchctl")
+        .args(["print", &domain])
+        .output()?
+        .status
+        .success()
+    {
         return Err("The launchd domain is unavailable; user registration requires a GUI login session".into());
     }
-    if Command::new("/bin/launchctl").args(["print", &target]).output()?.status.success() {
+    if Command::new("/bin/launchctl")
+        .args(["print", &target])
+        .output()?
+        .status
+        .success()
+    {
         return Err("A job with this label is already loaded".into());
     }
 
     match scope {
         Scope::User => ensure_label_available(
             &label,
-            &[&dir, Path::new("/Library/LaunchAgents"), Path::new("/System/Library/LaunchAgents")],
+            &[
+                &dir,
+                Path::new("/Library/LaunchAgents"),
+                Path::new("/System/Library/LaunchAgents"),
+            ],
         )?,
-        Scope::System(_) => ensure_label_available(
-            &label,
-            &[&dir, Path::new("/System/Library/LaunchDaemons")],
-        )?,
+        Scope::System(_) => ensure_label_available(&label, &[&dir, Path::new("/System/Library/LaunchDaemons")])?,
     }
     fs::create_dir_all(&dir)?;
     let path = dir.join(format!("{label}.plist"));
     native::write_new_checked(&path, &plist, |staged| {
-        let output = Command::new("/usr/bin/plutil").arg("-lint").arg("--").arg(staged).output()?;
+        let output = Command::new("/usr/bin/plutil")
+            .arg("-lint")
+            .arg("--")
+            .arg(staged)
+            .output()?;
         if !output.status.success() {
             return Err("plutil validation failed; plist was not published".into());
         }
         Ok(())
     })?;
-    println!("Registered {} (loads at next login/boot). To load now, run launchctl bootstrap {domain} with this plist path.", path.display());
+    println!(
+        "Registered {} (loads at next login/boot). To load now, run launchctl bootstrap {domain} with this plist path.",
+        path.display()
+    );
     Ok(())
 }
 
@@ -224,7 +275,15 @@ mod tests {
     fn preserves_arguments_and_escapes_xml() {
         let mut options = opts();
         options.env = vec![("KEY".into(), "first".into()), ("KEY".into(), "<last>&".into())];
-        let plist = render_plist("test", Some("/tmp"), &[], &options, Scope::User, Some(Path::new("/tmp"))).unwrap();
+        let plist = render_plist(
+            "test",
+            Some("/tmp"),
+            &[],
+            &options,
+            Scope::User,
+            Some(Path::new("/tmp")),
+        )
+        .unwrap();
         assert!(plist.contains("<string>a b</string>"));
         assert!(plist.contains("<string>a&lt;&amp;&gt;&quot;&apos;</string>"));
         assert!(plist.contains("<string></string>"));
@@ -271,10 +330,18 @@ mod tests {
         options.env.push(("TEST".into(), "<&>".into()));
         let plist = render_plist("test", Some("/tmp"), &[], &options, Scope::User, Some(&dir)).unwrap();
         native::write_new(&path, &plist).unwrap();
-        let output = Command::new("/usr/bin/plutil").arg("-lint").arg("--").arg(&path).output();
+        let output = Command::new("/usr/bin/plutil")
+            .arg("-lint")
+            .arg("--")
+            .arg(&path)
+            .output();
         fs::remove_dir_all(&dir).unwrap();
         let output = output.expect("plutil must be available");
-        assert!(output.status.success(), "plutil lint: {}", String::from_utf8_lossy(&output.stderr));
+        assert!(
+            output.status.success(),
+            "plutil lint: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
     #[test]
     #[ignore = "requires native macOS plutil"]

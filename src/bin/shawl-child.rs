@@ -71,8 +71,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         {
             info!("Sending ctrl-C event");
             unsafe {
-                windows::Win32::System::Console::GenerateConsoleCtrlEvent(windows::Win32::System::Console::CTRL_C_EVENT, 0)
-                    .unwrap();
+                windows::Win32::System::Console::GenerateConsoleCtrlEvent(
+                    windows::Win32::System::Console::CTRL_C_EVENT,
+                    0,
+                )
+                .unwrap();
             }
             info!("Sent ctrl-C event");
         }

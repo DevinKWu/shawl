@@ -386,7 +386,7 @@ speculate::speculate! {
     }
 
     fn p(path: &str) -> String {
-        std::fs::canonicalize(&path).unwrap().to_string_lossy().to_string()
+        std::fs::canonicalize(path).unwrap().to_string_lossy().to_string()
     }
 
     describe "run subcommand" {
@@ -1140,7 +1140,18 @@ mod native_cli_tests {
 
     #[test]
     fn system_scope_requires_explicit_account() {
-        let parsed = Cli::try_parse_from(["shawl", "add", "--name", "app", "--system", "--service-user", "appuser", "--", "/bin/sh"]).unwrap();
+        let parsed = Cli::try_parse_from([
+            "shawl",
+            "add",
+            "--name",
+            "app",
+            "--system",
+            "--service-user",
+            "appuser",
+            "--",
+            "/bin/sh",
+        ])
+        .unwrap();
         match parsed.sub {
             Subcommand::Add { common, .. } => {
                 assert!(common.system);
@@ -1152,7 +1163,10 @@ mod native_cli_tests {
             let mut args = vec!["shawl", "add", "--name", "app"];
             args.extend(flag);
             args.extend(["--", "/bin/sh"]);
-            assert_eq!(Cli::try_parse_from(args).unwrap_err().kind(), clap::error::ErrorKind::MissingRequiredArgument);
+            assert_eq!(
+                Cli::try_parse_from(args).unwrap_err().kind(),
+                clap::error::ErrorKind::MissingRequiredArgument
+            );
         }
     }
 }

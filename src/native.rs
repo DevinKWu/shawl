@@ -45,7 +45,9 @@ pub fn scope(opts: &CommonOpts) -> Result<Scope<'_>> {
     let uid = current_uid()?;
     match (opts.system, opts.service_user.as_deref()) {
         (false, None) if uid != 0 => Ok(Scope::User),
-        (false, None) => Err("Do not register user services as root; use --system --service-user ACCOUNT for system services".into()),
+        (false, None) => {
+            Err("Do not register user services as root; use --system --service-user ACCOUNT for system services".into())
+        }
         (true, Some(user)) if uid == 0 => {
             if !valid_user(user) || uid_for(Some(user))? == 0 {
                 return Err("System services require an existing non-root account name".into());
@@ -60,11 +62,7 @@ pub fn scope(opts: &CommonOpts) -> Result<Scope<'_>> {
 // Stage in a private directory on the same filesystem. Publishing by
 // hard_link is atomic and never overwrites an existing destination, even
 // when two registrations race or the destination is a symlink.
-pub fn write_new_checked(
-    path: &Path,
-    contents: &str,
-    validate: impl FnOnce(&Path) -> Result<()>,
-) -> Result<()> {
+pub fn write_new_checked(path: &Path, contents: &str, validate: impl FnOnce(&Path) -> Result<()>) -> Result<()> {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let parent = path.parent().ok_or("Missing service directory")?;
     let name = path.file_name().ok_or("Missing service filename")?;

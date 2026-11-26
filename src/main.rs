@@ -166,7 +166,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             dependencies,
             common,
         } => linux::add_service(&name, cwd.as_deref(), &dependencies, &common),
-        Subcommand::Run { .. } => Err("On Linux, start the registered service using systemctl (with --user for a user service).".into()),
+        Subcommand::Run { .. } => {
+            Err("On Linux, start the registered service using systemctl (with --user for a user service).".into())
+        }
     }
 }
 

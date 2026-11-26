@@ -9,7 +9,7 @@ and pass the command to run via CLI.
 
 ## Cross-platform development
 
-See [native service support](docs/platforms.md) for experimental Linux support and current limitations. Windows remains the original supported platform.
+See [native service support](docs/platforms.md) for experimental Linux and macOS support and current limitations.
 
 ## Installation
 * Prebuilt binaries are available on the
