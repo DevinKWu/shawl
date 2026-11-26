@@ -3,7 +3,13 @@ use crate::{
     cli::CommonOpts,
     native::{self, Result, Scope},
 };
-use std::{collections::BTreeMap, fs, path::{Path, PathBuf}, process::Command};
+use std::{
+    collections::BTreeMap,
+    fs,
+    io::ErrorKind,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 fn xml(value: &str) -> Result<String> {
     // Reject control characters (including CR, which XML normalizes) and
@@ -128,6 +134,35 @@ fn render_plist(
     Ok(out)
 }
 
+// A job may exist on disk without being loaded. Refuse label collisions
+// in the standard directories for the selected launchd domain.
+fn ensure_label_available(label: &str, directories: &[&Path]) -> Result<()> {
+    for dir in directories {
+        let entries = match fs::read_dir(dir) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == ErrorKind::NotFound => continue,
+            Err(error) => return Err(error.into()),
+        };
+        for entry in entries {
+            let path = entry?.path();
+            if path.extension().is_none_or(|ext| ext != "plist") || !path.is_file() {
+                continue;
+            }
+            let output = Command::new("/usr/bin/plutil")
+                .args(["-extract", "Label", "raw", "-o", "-", "--"])
+                .arg(&path)
+                .output()?;
+            if !output.status.success() {
+                return Err(format!("Unable to inspect existing launchd plist: {}", path.display()).into());
+            }
+            if String::from_utf8(output.stdout)?.trim_end_matches('\n') == label {
+                return Err(format!("A launchd plist already uses this label: {}", path.display()).into());
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn add_service(name: &str, cwd: Option<&str>, dependencies: &[String], opts: &CommonOpts) -> Result<()> {
     let scope = native::scope(opts)?;
     let label = label(name)?;
@@ -151,17 +186,25 @@ pub fn add_service(name: &str, cwd: Option<&str>, dependencies: &[String], opts:
         return Err("A job with this label is already loaded".into());
     }
 
+    match scope {
+        Scope::User => ensure_label_available(
+            &label,
+            &[&dir, Path::new("/Library/LaunchAgents"), Path::new("/System/Library/LaunchAgents")],
+        )?,
+        Scope::System(_) => ensure_label_available(
+            &label,
+            &[&dir, Path::new("/System/Library/LaunchDaemons")],
+        )?,
+    }
     fs::create_dir_all(&dir)?;
     let path = dir.join(format!("{label}.plist"));
-    native::write_new(&path, &plist)?;
-    let validation = Command::new("/usr/bin/plutil").arg("-lint").arg("--").arg(&path).output();
-    match validation {
-        Ok(result) if result.status.success() => (),
-        _ => {
-            fs::remove_file(&path)?;
-            return Err("plutil validation failed; generated plist removed".into());
+    native::write_new_checked(&path, &plist, |staged| {
+        let output = Command::new("/usr/bin/plutil").arg("-lint").arg("--").arg(staged).output()?;
+        if !output.status.success() {
+            return Err("plutil validation failed; plist was not published".into());
         }
-    }
+        Ok(())
+    })?;
     println!("Registered {} (loads at next login/boot). To load now, run launchctl bootstrap {domain} with this plist path.", path.display());
     Ok(())
 }
@@ -232,5 +275,21 @@ mod tests {
         fs::remove_dir_all(&dir).unwrap();
         let output = output.expect("plutil must be available");
         assert!(output.status.success(), "plutil lint: {}", String::from_utf8_lossy(&output.stderr));
+    }
+    #[test]
+    #[ignore = "requires native macOS plutil"]
+    fn rejects_unloaded_label_collision() {
+        let dir = std::env::temp_dir().join(format!("shawl-label-verify-{}", std::process::id()));
+        fs::create_dir(&dir).unwrap();
+        let path = dir.join("different-filename.plist");
+        let mut options = opts();
+        options.no_log = true;
+        let plist = render_plist("test", None, &[], &options, Scope::User, None).unwrap();
+        native::write_new(&path, &plist).unwrap();
+        let duplicate = ensure_label_available("org.shawl.test", &[&dir]);
+        let distinct = ensure_label_available("org.shawl.other", &[&dir]);
+        fs::remove_dir_all(&dir).unwrap();
+        assert!(duplicate.is_err());
+        assert!(distinct.is_ok());
     }
 }

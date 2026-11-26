@@ -121,6 +121,10 @@ fn systemctl(scope: Scope<'_>) -> Command {
     } else {
         "/bin/systemctl"
     });
+    if matches!(scope, Scope::System(_)) {
+        // Do not allow inherited bus or unit-path overrides for privileged registration.
+        command.env_clear();
+    }
     command.arg(match scope {
         Scope::User => "--user",
         Scope::System(_) => "--system",
@@ -162,7 +166,7 @@ pub fn add_service(name: &str, cwd: Option<&str>, dependencies: &[String], opts:
     // for a missing or shadowed unit.
     let verification = (|| -> Result<()> {
         let output = systemctl(scope)
-            .args(["show", "--property=LoadState,FragmentPath", "--", &filename])
+            .args(["show", "--property=LoadState,FragmentPath,User", "--", &filename])
             .output()?;
         if !output.status.success() {
             return Err("Unable to inspect registered unit".into());
@@ -173,6 +177,12 @@ pub fn add_service(name: &str, cwd: Option<&str>, dependencies: &[String], opts:
         let expected = fs::canonicalize(&path)?;
         if !loaded || fragment.and_then(|p| fs::canonicalize(p).ok()).as_ref() != Some(&expected) {
             return Err("The systemd manager did not load the generated unit; check its configuration directory".into());
+        }
+        if let Scope::System(user) = scope {
+            let effective_user = stdout.lines().find_map(|line| line.strip_prefix("User="));
+            if effective_user != Some(user) {
+                return Err("The effective systemd User differs from the requested account; check native overrides".into());
+            }
         }
         Ok(())
     })();

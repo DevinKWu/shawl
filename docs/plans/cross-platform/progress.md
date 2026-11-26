@@ -9,10 +9,13 @@
 - 新增單元測試（scope、CLI 帳號參數互相依賴、引數/XML escaping、環境變數、重複檔案防護與重啟策略），更新平台文件與三平台 CI test matrix。
 - 新增原生設定語法測試（systemd-analyze/plutil 驗證 Rust 實際產出的檔案），CI 在 Linux/macOS 明確執行；不註冊或啟動服務。
 
+- Review 修正：原子發布服務檔案且不覆寫檔案/符號連結、macOS 先 lint 再發布並檢查標準目錄未載入 label、systemd system scope 清除繼承環境並確認實際 User 屬性；補齊相應測試。
+
 ## 驗證與限制
 - 本次容器確實無 cargo/rustc；未編譯或執行 Rust 測試。本次本地 systemd 257 對代表性系統級 unit 執行 verify，exit 0（測試用 nobody 帳號有安全警告）；並非 Rust 產出或原生整合驗證。新加入的語法測試尚未執行。
-- 開始本次實作時，查詢 HEAD Actions 執行數為 0；尚無三平台測試成功證據。
-- macOS 系統級服務初版需要 --no-log 或 --no-log-cmd；使用者日誌無內建輪替；兩平台無法等價映射的選項明確拒絕。launchd 未載入的其他 plist 標籤衝突仍待加強。
+- 本輪 HEAD 56a308548154937689af239f410ea5057122fb99 的 Actions 執行數為 0；容器再次確認無 cargo/rustc，且無法解析 GitHub 與 Rust 下載站 DNS。尚無三平台測試成功證據。
+- 本輪代表性 user unit 以本機 systemd 257 verify 返回 0；代表性 plist 以 Linux 上的 Swift plutil -lint 返回 0，Python plistlib 反序列化保留特殊字元及空引數。並非 Rust 產出、macOS 原生驗收或服務生命週期測試。
+- macOS 系統級服務初版需要 --no-log 或 --no-log-cmd；使用者日誌無內建輪替；兩平台無法等價映射的選項明確拒絕。非標準目錄未載入的 launchd plist 不在衝突檢查範圍。
 - Windows 原有 SCM/Job Object 程式碼未修改，但回歸測試仍須執行。
 
 ## 下一步

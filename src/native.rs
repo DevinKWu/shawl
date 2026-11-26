@@ -1,11 +1,12 @@
 //! Small shared helpers for native Unix service registration.
 use crate::cli::CommonOpts;
 use std::{
-    fs::{self, OpenOptions},
+    fs::{self, DirBuilder, OpenOptions},
     io::Write,
-    os::unix::fs::OpenOptionsExt,
+    os::unix::fs::{DirBuilderExt, OpenOptionsExt},
     path::Path,
     process::Command,
+    sync::atomic::{AtomicU64, Ordering},
 };
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -56,17 +57,55 @@ pub fn scope(opts: &CommonOpts) -> Result<Scope<'_>> {
     }
 }
 
-// Never replace an existing file, including a symlink. Only clean up a file
-// after this call successfully created it.
-pub fn write_new(path: &Path, contents: &str) -> Result<()> {
-    let mut file = OpenOptions::new().write(true).create_new(true).mode(0o600).open(path)?;
-    let result = file.write_all(contents.as_bytes()).and_then(|_| file.sync_all());
-    drop(file);
-    if let Err(error) = result {
-        fs::remove_file(path).map_err(|cleanup| format!("Writing service file failed ({error}); cleanup failed ({cleanup})"))?;
-        return Err(error.into());
+// Stage in a private directory on the same filesystem. Publishing by
+// hard_link is atomic and never overwrites an existing destination, even
+// when two registrations race or the destination is a symlink.
+pub fn write_new_checked(
+    path: &Path,
+    contents: &str,
+    validate: impl FnOnce(&Path) -> Result<()>,
+) -> Result<()> {
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let parent = path.parent().ok_or("Missing service directory")?;
+    let name = path.file_name().ok_or("Missing service filename")?;
+    let stage = parent.join(format!(
+        ".shawl-stage-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    DirBuilder::new().mode(0o700).create(&stage)?;
+    let staged_path = stage.join(name);
+    let result = (|| -> Result<()> {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&staged_path)?;
+        file.write_all(contents.as_bytes())?;
+        file.sync_all()?;
+        drop(file);
+        validate(&staged_path)?;
+        fs::hard_link(&staged_path, path)?;
+        Ok(())
+    })();
+
+    let cleanup = fs::remove_dir_all(&stage);
+    match (result, cleanup) {
+        (Ok(()), Ok(())) => Ok(()),
+        (Ok(()), Err(error)) => {
+            eprintln!("Service file published, but staging directory cleanup failed: {error}");
+            Ok(())
+        }
+        (Err(error), Ok(())) => Err(error),
+        (Err(error), Err(cleanup)) => {
+            Err(format!("Service publication failed ({error}); staging cleanup failed ({cleanup})").into())
+        }
     }
-    Ok(())
+}
+
+#[cfg(any(target_os = "linux", test))]
+pub fn write_new(path: &Path, contents: &str) -> Result<()> {
+    write_new_checked(path, contents, |_| Ok(()))
 }
 
 pub fn valid_name(name: &str) -> bool {
@@ -106,6 +145,35 @@ mod tests {
         assert_eq!(fs::read_to_string(&path).unwrap(), "original");
         use std::os::unix::fs::PermissionsExt;
         assert_eq!(fs::metadata(&path).unwrap().permissions().mode() & 0o077, 0);
+        fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn validation_failure_never_publishes_file() {
+        let dir = std::env::temp_dir().join(format!("shawl-stage-test-{}", std::process::id()));
+        fs::create_dir(&dir).unwrap();
+        let path = dir.join("service");
+        let result = write_new_checked(&path, "invalid", |staged| {
+            assert_eq!(fs::read_to_string(staged)?, "invalid");
+            assert!(!path.exists());
+            Err("validation failed".into())
+        });
+        assert!(result.is_err());
+        assert!(!path.exists());
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 0);
+        fs::remove_dir(&dir).unwrap();
+    }
+
+    #[test]
+    fn refuses_to_replace_symlink() {
+        let dir = std::env::temp_dir().join(format!("shawl-symlink-test-{}", std::process::id()));
+        fs::create_dir(&dir).unwrap();
+        let path = dir.join("service");
+        let original = dir.join("original");
+        fs::write(&original, "original").unwrap();
+        std::os::unix::fs::symlink(&original, &path).unwrap();
+        assert!(write_new(&path, "replacement").is_err());
+        assert!(fs::symlink_metadata(&path).unwrap().is_symlink());
+        assert_eq!(fs::read_to_string(&original).unwrap(), "original");
         fs::remove_dir_all(dir).unwrap();
     }
 }

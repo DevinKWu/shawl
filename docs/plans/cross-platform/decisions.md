@@ -12,3 +12,5 @@
 
 - Linux/macOS 新增 Unix 專屬 --system 與 --service-user，系統級註冊需 root 且服務帳號不得為 UID 0。user scope 拒絕 root。Windows CLI 不變。
 - macOS 使用原生 LaunchAgent/LaunchDaemon，add 只寫入並 lint plist，不在當前 session bootstrap；標準目錄於下次登入/開機載入。使用 launchd SIGTERM、秒級逾時及 throttling；不承諾完整程序樹清理。系統級初版必須停用捕獲日誌；使用者日誌以原生路徑管理，無內建輪替。
+
+- 安全性 Review：服務定義改為私有 staging、完整寫入後原子發布（同一檔案系統 hard link，不覆蓋）；macOS 發布前執行 lint、檢查標準目錄既有 Label，無法檢查時拒絕註冊。Linux system scope 不繼承可能改變 bus 的環境，驗證有效 User。原生管理者自訂 overrides 仍需管理者審查。

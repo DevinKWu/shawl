@@ -33,7 +33,9 @@ sudo systemctl disable --now my-app.service
 Use an active systemd manager. User units are installed under
 `$XDG_CONFIG_HOME/systemd/user` (default `~/.config/systemd/user`); system
 units under `/etc/systemd/system`. Shawl refuses existing units, reloads
-the manager, verifies the loaded fragment and cleans up failed registration.
+the manager, verifies the loaded fragment and (for system services) the effective
+User property, and cleans up failed registration. Native administrator overrides
+remain under the administrator's control.
 It does not start or enable the unit. To remove, stop and disable it first,
 remove only the generated file, and run `systemctl daemon-reload` (add
 `--user` for user units). User services require administrator-configured
@@ -69,10 +71,14 @@ Bootout unloads a job; it may load again at login/boot if its plist remains.
 To prevent automatic loading, unload and remove only the generated plist,
 or explicitly disable the job with the native manager. To start again after
 bootout, bootstrap its file. Kickstart -k restarts a loaded job.
-Registration checks the domain and loaded label, refuses existing files and
-validates the generated plist with plutil. An unloaded conflicting label
-in a different file is not discoverable from launchctl print; administrators
-must avoid such collisions.
+Registration checks the domain, loaded label, and existing plist labels in
+the standard directories for the selected domain. If an existing plist cannot
+be inspected, registration fails rather than risking a duplicate label.
+The generated plist is validated with plutil before atomic publication. Jobs
+outside standard directories are not scanned; administrators must avoid collisions.
+Both Unix backends stage new service definitions in a private directory on the
+same filesystem, publish without replacing existing files or symlinks, and
+remove staging files. Filesystems must support hard links.
 
 ## Supported options and native differences
 
@@ -104,8 +110,9 @@ though files are created with mode 0600. Never pass credentials through
 ## Validation
 
 Run `cargo test --locked` on each target. On Linux and macOS, run
-`cargo test --locked --bin shawl generated_native_config -- --ignored` to
-check the actual generated definition with systemd-analyze or plutil.
+`cargo test --locked --bin shawl -- --ignored` to
+check the actual generated definition with systemd-analyze or plutil and, on
+macOS, detect an unloaded label collision.
 These tests do not register or start services; they are not lifecycle tests.
 Before release, separately exercise user/system registration, service
 identity, exact argv/env/cwd, start and stop, normal/failing exit, restart,
